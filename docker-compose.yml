@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  backend:
+    image: fabreguesm/agente-ia-backend:1.0.0
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agente-ventas-backend
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - BUSINESS_TYPE=${BUSINESS_TYPE:-hibrido}
+      - BUSINESS_DESCRIPTION=${BUSINESS_DESCRIPTION}
+      - BUSINESS_TONE=${BUSINESS_TONE:-profesional}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - FB_HOST=${FB_HOST}
+      - FB_PORT=${FB_PORT}
+      - FB_DATABASE=${FB_DATABASE}
+      - FB_USER=${FB_USER}
+      - FB_PASSWORD=${FB_PASSWORD}
+    volumes:
+      - backend_learning_data:/app/learning_data
+      - backend_data:/app/data
+      - backend_db:/app/db
+      # Si necesitas acceso a la base de datos Firebird local, descomentar:
+      # - ${FB_DATABASE_PATH}:${FB_DATABASE}:ro
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.agente-backend.rule=Host(`${BACKEND_DOMAIN:-api.agente.local}`)"
+      - "traefik.http.routers.agente-backend.entrypoints=websecure"
+      - "traefik.http.routers.agente-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.agente-backend.loadbalancer.server.port=3001"
+      # CORS headers
+      - "traefik.http.middlewares.agente-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.agente-cors.headers.accesscontrolalloworiginlist=${FRONTEND_URL:-https://agente.local}"
+      - "traefik.http.middlewares.agente-cors.headers.accesscontrolmaxage=100"
+      - "traefik.http.middlewares.agente-cors.headers.addvaryheader=true"
+      - "traefik.http.routers.agente-backend.middlewares=agente-cors@docker"
+    deploy:
+      placement:
+        constraints:
+          - ${NODE:-node.role==worker}
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    logging:
+      driver: loki
+      options:
+        loki-url: ${LOKI_URL}
+
+  frontend:
+    image: fabreguesm/agente-ia-frontend:1.0.0
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: agente-ventas-frontend
+    depends_on:
+      - backend
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.agente-frontend.rule=Host(`${FRONTEND_DOMAIN:-agente.local}`)"
+      - "traefik.http.routers.agente-frontend.entrypoints=websecure"
+      - "traefik.http.routers.agente-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.agente-frontend.loadbalancer.server.port=80"
+      # Compresión
+      - "traefik.http.middlewares.agente-compress.compress=true"
+      - "traefik.http.routers.agente-frontend.middlewares=agente-compress@docker"
+    deploy:
+      placement:
+        constraints:
+          - ${NODE:-node.role==worker}
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    logging:
+      driver: loki
+      options:
+        loki-url: ${LOKI_URL}
+
+networks:
+  traefik:
+    name: traefik
+    external: true
+
+volumes:
+  backend_learning_data:
+    driver: local
+  backend_data:
+    driver: local
+  backend_db:
+    driver: local
