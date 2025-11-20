@@ -7,9 +7,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: agente-ventas-backend
+    ports:
+      - "6231:6231"
     environment:
       - NODE_ENV=production
-      - PORT=3001
+      - PORT=${PORT:-6231}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
@@ -40,7 +42,7 @@ services:
       - "traefik.http.routers.agente-backend.rule=Host(`${BACKEND_DOMAIN:-api.agente.local}`)"
       - "traefik.http.routers.agente-backend.entrypoints=websecure"
       - "traefik.http.routers.agente-backend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.agente-backend.loadbalancer.server.port=3001"
+      - "traefik.http.services.agente-backend.loadbalancer.server.port=6231"
       # CORS headers
       - "traefik.http.middlewares.agente-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
       - "traefik.http.middlewares.agente-cors.headers.accesscontrolalloworiginlist=${FRONTEND_URL:-https://agente.local}"
@@ -64,9 +66,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${BACKEND_URL:-http://10.250.0.68:6231}
     container_name: agente-ventas-frontend
     ports:
       - "6232:80"
+    environment:
+      - VITE_API_URL=${BACKEND_URL:-http://10.250.0.68:6231}
     depends_on:
       - backend
     networks:
