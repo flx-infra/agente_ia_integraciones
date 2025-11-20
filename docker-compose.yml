@@ -65,6 +65,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: agente-ventas-frontend
+    ports:
+      - "6232:80"
     depends_on:
       - backend
     networks:
